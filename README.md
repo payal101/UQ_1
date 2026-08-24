@@ -1,38 +1,103 @@
-# README — Monte Carlo Prediction Intervals
+# Monte Carlo Prediction Intervals — README
 
-## What this notebook does
+## Overview
 
-Simulates the process of fitting a linear regression model over and over (5000 times), builds a prediction interval from those simulations, then checks if that interval is actually trustworthy by repeating the whole thing 1000 more times.
+This notebook builds a Monte Carlo simulation pipeline for uncertainty quantification in simple linear regression, then validates the resulting intervals with a coverage/calibration test.
 
-**True model:** y = 1 + 2x + noise
-
----
-
-## The steps, in plain terms
-
-1. **Make fake data** — generate 50 (x, y) points from the true model.
-2. **Fit a line** — run ordinary least squares on that fake data.
-3. **Predict** — use the fitted line to predict y at x = 1.
-4. **Add noise** — add one more random noise value on top, to simulate what an actual new observation would look like.
-5. **Repeat 5000 times** — steps 1–4, each time with brand new fake data. Collect all 5000 results.
-6. **Build the interval** — take the middle 95% of those 5000 values → that's the interval.
-7. **Check it works** — repeat everything (steps 1–6) 1000 times, and each time check if a real new data point actually falls inside the interval. Do this at 80%, 90%, 95%, and 99% confidence levels.
-
-**Result: it works.** The intervals contain the true value about as often as they're supposed to.
+**Important:** This pipeline produces **prediction intervals** (uncertainty for a new individual observation), not **confidence intervals** (uncertainty for the mean response or a parameter). See "Known Issues" below before using or citing these results.
 
 ---
 
-## Two things to know before using this
+## True Model
 
-### 1. This is a prediction interval, not a confidence interval
+```
+y = β0 + β1*x + ε,   ε ~ N(0, σ²)
+```
 
-- **Prediction interval** = range for one new data point (includes noise)
-- **Confidence interval** = range for the true underlying line/average (no noise added)
+Defaults used throughout: β0 = 1, β1 = 2, σ = 1, n = 50.
 
-Step 4 adds noise — that's what makes this a prediction interval. If you need a confidence interval instead, skip step 4 and just use the raw predictions from step 3.
+---
 
-### 2. The interval is a bit broader than the "standard" one
+## Contents
 
-Every time this generates fake data (step 1), it randomizes everything — including the x-values, not just the noise. The usual textbook interval assumes you already have your data and only the noise is random. Because this version also randomizes the x's, it's measuring "what if I reran the whole experiment from scratch" rather than "what if I just got a new data point using the data I already have." Both are valid things to measure, but they're not the same number, and this one will come out a bit wider.
+**1. `generate_training_data(n, beta0, beta1, sigma)`**
+Draws a fresh synthetic dataset from the true model: x ~ N(0,1), noise ~ N(0,σ²), y = β0 + β1*x + noise.
 
-**Fix if you want the standard version:** generate the fake data once, outside the loop, and only re-randomize the noise inside the loop.
+**2. `fit_linear_regression(x, y)`**
+Closed-form OLS fit (no sklearn) — returns beta0_hat, beta1_hat.
+
+**3. `predict(beta0_hat, beta1_hat, x_star)`**
+Point prediction: y_hat = beta0_hat + beta1_hat * x_star.
+
+**4. `monte_carlo_predictive_distribution(x_star, R, n, beta0, beta1, sigma)`**
+Runs R (default 5000) iterations of:
+- generate a fresh random training set
+- fit OLS
+- predict y_hat at x_star
+- add one more fresh noise draw → simulated future y*
+
+Returns an array of R simulated y* values.
+
+**5. `monte_carlo_prediction_interval(...)`**
+Wraps step 4, takes the alpha/2 and 1-alpha/2 quantiles of the simulated y* values as the interval bounds, plus the median.
+
+**6. Histogram plot**
+Visualizes the 5000 simulated y* values from one call to step 5, with dashed lines at the 2.5%, median, and 97.5% points.
+
+**7. `coverage_test(num_experiments, confidence, R, ...)`**
+Repeats the entire interval-construction process (step 5) num_experiments (default 1000) times. Each repetition:
+- builds a fresh interval via Monte Carlo
+- draws one independent "true" future y*
+- checks whether it falls inside the interval
+
+Returns the fraction of repetitions where it did (empirical coverage).
+
+**8. Calibration sweep + plot**
+Runs step 7 at nominal confidence levels [0.80, 0.90, 0.95, 0.99] and plots empirical vs. nominal coverage against the y=x reference line.
+
+---
+
+## Known Issue 1: This computes prediction intervals, not confidence intervals
+
+Step 4 explicitly adds a fresh noise draw (`future_noise`) to each simulated value before collecting it. This makes the output a **prediction interval** (uncertainty for a new individual observation), not a **confidence interval** (uncertainty for the mean response or a parameter estimate like beta1).
+
+- Confidence interval target: E[y | x_star] — the noiseless population regression value — or a parameter such as beta1.
+- Prediction interval target: a new observation y* = E[y | x_star] + noise.
+
+Formula-wise, the difference is one term under the square root:
+
+```
+CI:  y_hat ± t * s * sqrt(1/n + (x_star - x_bar)^2 / Sxx)
+PI:  y_hat ± t * s * sqrt(1 + 1/n + (x_star - x_bar)^2 / Sxx)
+```
+
+**If confidence intervals are required:** remove the `future_noise` addition in step 4 and take quantiles of the raw y_hat values (the fitted-line predictions across resampled datasets) instead.
+
+---
+
+## Known Issue 2: x_train is re-randomized every iteration
+
+In step 4, a new `x_train` (not just new noise) is generated on every Monte Carlo iteration. This means the interval marginalizes over randomness in the training design itself, not just parameter and noise uncertainty conditional on one fixed dataset. As a result, this pipeline quantifies **unconditional/total** uncertainty (as if the whole experiment — sample and all — were rerun), rather than the standard **conditional** interval (given one fixed, already-collected dataset).
+
+**If the conditional interval is required:** generate `x_train` once, outside the loop, and only resample noise/y inside the loop.
+
+---
+
+## Validation Results
+
+The coverage test confirms the intervals produced by this pipeline are well-calibrated **for the unconditional prediction-interval target actually being simulated** — empirical coverage tracks nominal coverage closely across 80/90/95/99% confidence levels. This does not confirm calibration against the classical (conditional) prediction interval formula, nor against any confidence interval target.
+
+| Nominal | Empirical |
+|---------|-----------|
+| 0.80    | ~0.826    |
+| 0.90    | ~0.904    |
+| 0.95    | ~0.956    |
+| 0.99    | ~0.991    |
+
+---
+
+## Suggested Fixes / Next Steps
+
+- To get confidence intervals: drop the `future_noise` step in `monte_carlo_predictive_distribution`.
+- To get the conditional (standard textbook) interval: move `x_train, y_train = generate_training_data(...)` outside the Monte Carlo loop so it's fixed across replicates, and only resample noise inside.
+- Both fixes can be combined to produce the classical CI for the mean response.
