@@ -2,7 +2,7 @@
 
 This project studies **uncertainty in linear regression predictions**.
 
-The main goal is to construct prediction intervals for a future observation \(y^*\) and check whether those intervals achieve their intended coverage.
+The main goal is to construct prediction intervals for a future observation \(y^*\) and evaluate whether those intervals achieve their intended coverage.
 
 The notebook compares **simulation-based, exact Gaussian, and Chernoff-bound approaches**.
 
@@ -10,86 +10,94 @@ The notebook compares **simulation-based, exact Gaussian, and Chernoff-bound app
 
 ## 1. Basic Setup
 
-We use the linear model
+We consider the linear model
 
 $$
-y = \beta_0 + \beta_1x + \epsilon
+y = \beta_0 + \beta_1 x + \epsilon,
 $$
 
-with
+where
 
 $$
-\beta_0=1,\qquad \beta_1=2,\qquad \epsilon\sim N(0,1).
+\beta_0 = 1,
+\qquad
+\beta_1 = 2,
+\qquad
+\epsilon \sim \mathcal N(0,1).
 $$
 
-For a new input \(x^*\), we want an interval
+For a new input \(x^*\), we want to construct an interval
 
 $$
 [L,U]
 $$
 
-that contains the future value \(y^*\) with probability approximately \(1-\alpha\).
-
-For example, for a 95% interval,
+that contains the future observation \(y^*\) with probability approximately
 
 $$
-1-\alpha=0.95.
+1-\alpha.
+$$
+
+For example, a 95% prediction interval corresponds to
+
+$$
+1-\alpha = 0.95.
 $$
 
 ---
 
 ## 2. Methods Compared
 
-We use five approaches:
+The notebook considers five approaches:
 
-| Method                | Idea                                                             |
-| --------------------- | ---------------------------------------------------------------- |
-| **Monte Carlo OLS**   | Simulate many datasets and use the empirical quantiles           |
-| **OLS Exact**         | Use the exact Gaussian prediction interval                       |
-| **OLS Chernoff**      | Use a Chernoff bound instead of the Gaussian quantile            |
-| **Bayesian Exact**    | Use the Bayesian posterior predictive distribution               |
-| **Bayesian Chernoff** | Apply the Chernoff bound to the Bayesian predictive distribution |
+| Method                | Idea                                                                               |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| **Monte Carlo OLS**   | Simulate many datasets and estimate prediction intervals using empirical quantiles |
+| **OLS Exact**         | Use the exact Gaussian prediction interval                                         |
+| **OLS Chernoff**      | Replace the Gaussian quantile with a Chernoff bound                                |
+| **Bayesian Exact**    | Use the Bayesian posterior predictive distribution                                 |
+| **Bayesian Chernoff** | Apply a Chernoff bound to the Bayesian predictive distribution                     |
 
-The main comparison in the final experiment is between the **four closed-form methods**.
+The main closed-form comparison is between the four OLS/Bayesian exact and Chernoff methods.
 
 ---
 
 ## 3. Monte Carlo Prediction Interval
 
-The original notebook uses simulation.
+The notebook first constructs prediction intervals using simulation.
 
-We repeatedly:
+For each experiment, we:
 
-1. Generate training data.
-2. Fit OLS.
+1. Generate a training dataset.
+2. Fit the regression model.
 3. Generate a future observation.
-4. Store the prediction.
-5. Repeat many times.
+4. Record the prediction.
+5. Repeat the experiment many times.
 
-The resulting simulated distribution is used to obtain prediction intervals from empirical quantiles.
+The empirical distribution of the resulting predictions is then used to construct prediction intervals using empirical quantiles.
 
-This gives us a baseline to compare against the closed-form methods.
+This provides a simulation-based baseline for comparison with the analytical methods.
 
 ---
 
-## 4. Bayesian Prediction
+## 4. Bayesian Linear Regression
 
 For Bayesian linear regression, we place a Gaussian prior on the regression parameters.
 
-After observing the data, we obtain a posterior distribution for the parameters.
+After observing the training data, we obtain a posterior distribution over the parameters.
 
-This gives a **posterior predictive distribution** for a new observation:
+For a new input \(x^*\), this posterior induces a **posterior predictive distribution**
 
 $$
-Y^*|x^*,D
+Y^* \mid x^*,D
 \sim
-N(m^*,s^{*2})
+\mathcal N(m^*,s^{*2}),
 $$
 
 where
 
 $$
-m^*=x^{*T}\mu_n
+m^* = x^{*T}\mu_n
 $$
 
 and
@@ -97,129 +105,195 @@ and
 $$
 s^{*2}
 =
-\sigma^2+x^{*T}\Sigma_nx^*.
+\sigma^2 + x^{*T}\Sigma_n x^*.
 $$
 
-The predictive uncertainty contains:
+The predictive variance contains two sources of uncertainty:
 
-* uncertainty in the regression parameters;
-* observation noise.
+* **Parameter uncertainty:** uncertainty about the regression coefficients.
+* **Observation noise:** the irreducible noise in the future observation.
 
-The exact Bayesian prediction interval is obtained from the Gaussian quantile:
+The exact Bayesian prediction interval is therefore
 
 $$
+\boxed{
 m^*
 \pm
-z_{1-\alpha/2}s^*.
+z_{1-\alpha/2}s^*
+}
 $$
+
+where \(z_{1-\alpha/2}\) is the corresponding standard Gaussian quantile.
 
 ---
 
 ## 5. Chernoff Prediction Interval
 
-Instead of using the exact Gaussian quantile, we can use a **Chernoff bound**.
+Instead of using the exact Gaussian quantile, we can construct an interval using a **Chernoff bound**.
 
-For a mean-zero \(v\)-sub-Gaussian random variable \(Z\),
+Suppose \(Z\) is a mean-zero \(v\)-sub-Gaussian random variable. Then
 
 $$
 P(|Z|\geq t)
 \leq
-2\exp\left(-\frac{t^2}{2v}\right).
+2\exp\left(
+-\frac{t^2}{2v}
+\right).
 $$
 
-Setting the right-hand side equal to \(\alpha\) gives
+To obtain a confidence level \(1-\alpha\), set
 
 $$
-t=
-\sqrt{2v\log(2/\alpha)}.
+2\exp\left(
+-\frac{t^2}{2v}
+\right)
+=
+\alpha.
 $$
 
-Therefore, the Chernoff interval is
+Solving for \(t\),
+
+$$
+t
+=
+\sqrt{2v\log\left(\frac{2}{\alpha}\right)}.
+$$
+
+Therefore, a Chernoff prediction interval has the form
 
 $$
 \boxed{
 \text{prediction}
 \pm
-\sqrt{2v\log(2/\alpha)}
+\sqrt{
+2v\log\left(\frac{2}{\alpha}\right)
+}
 }
 $$
 
-The important idea is:
+The key idea is:
 
-> **Chernoff does not need the full Gaussian distribution. A sub-Gaussian bound is enough.**
+> **Chernoff bounds do not require the full distribution. A suitable tail or sub-Gaussian bound is sufficient.**
 
-The trade-off is that the resulting interval is usually wider.
+The trade-off is that the resulting interval can be wider than the exact Gaussian interval.
 
 ---
 
-## 6. Checking Coverage
+## 6. Coverage
 
-After constructing an interval, we need to check whether it actually covers future observations at the expected rate.
+Constructing an interval is only part of the problem. We also need to evaluate whether it actually achieves the desired coverage.
 
-For each experiment, define
+For each experiment, define the indicator
 
 $$
-Z_i =
-\mathbf 1\{y_i^*\text{ lies inside the interval}\}.
+Z_i
+=
+\mathbf 1
+\left\{
+y_i^* \in [L_i,U_i]
+\right\}.
 $$
 
-The empirical coverage is
+The empirical coverage over \(N\) experiments is
 
 $$
 \hat p_N
 =
-\frac{1}{N}\sum_{i=1}^N Z_i.
+\frac{1}{N}
+\sum_{i=1}^{N} Z_i.
 $$
 
-For example, if we construct a 95% interval and 1910 out of 2000 future observations fall inside it,
+For example, if a nominal 95% interval contains 1910 out of 2000 future observations, then
 
 $$
-\hat p_N=\frac{1910}{2000}=0.955.
+\hat p_N
+=
+\frac{1910}{2000}
+=
+0.955.
 $$
 
-We then compare empirical coverage with the nominal coverage.
+We compare this empirical coverage with the desired nominal coverage.
 
 ---
 
-## 7. Chernoff–Hoeffding Bound for Coverage
+## 7. Chernoff–Hoeffding Bound for Coverage Estimation
 
-The coverage indicators are Bernoulli random variables.
+The coverage indicators \(Z_i\) are Bernoulli random variables.
 
-Therefore,
+Therefore, Hoeffding's inequality gives
 
 $$
-P(|\hat p_N-p_{\mathrm{cov}}|\geq\epsilon)
+P
+\left(
+|\hat p_N-p_{\mathrm{cov}}|
+\geq \epsilon
+\right)
 \leq
 2e^{-2N\epsilon^2}.
 $$
 
-This tells us how accurately we can estimate the true coverage using \(N\) experiments.
+This provides a probabilistic guarantee on how close the empirical coverage \(\hat p_N\) is to the true coverage \(p_{\mathrm{cov}}\).
 
-**Important:** this bound does not prove that the interval has 95% coverage.
+### Important distinction
 
-It only tells us that the empirical coverage is close to the true coverage with high probability.
+This bound **does not prove that the prediction interval has 95% coverage**.
+
+Instead, it tells us how reliably we can estimate the interval's actual coverage using a finite number of experiments.
+
+Thus there are two separate uses of concentration bounds in the experiment:
+
+$$
+\boxed{
+\text{Chernoff bound for interval construction}
+}
+$$
+
+and
+
+$$
+\boxed{
+\text{Hoeffding bound for estimating coverage}
+}
+$$
 
 ---
 
-## 8. Experiments
+## 8. Experimental Setup
 
-We use:
+The coverage experiment uses:
 
-* \(n=50\) training samples
-* \(N=2000\) coverage experiments
-* True model:
+* Training samples:
+
+  $$
+  n=50
+  $$
+
+* Number of coverage experiments:
+
+  $$
+  N=2000
+  $$
+
+* True regression model:
 
   $$
   y=1+2x+\epsilon
   $$
-* \(\epsilon\sim N(0,1)\)
+
+* Noise:
+
+  $$
+  \epsilon\sim\mathcal N(0,1)
+  $$
+
 * Nominal coverage levels:
 
   $$
-  80\%,90\%,95\%,99\%.
+  80\%,\quad90\%,\quad95\%,\quad99\%.
   $$
 
-For the closed-form comparison, the training design is fixed and the noise/future observations are resampled.
+For the closed-form comparison, the training design is fixed while the training noise and future observations are resampled across experiments.
 
 ---
 
@@ -227,19 +301,31 @@ For the closed-form comparison, the training design is fixed and the noise/futur
 
 ### Plot 1 — Monte Carlo Predictive Distribution
 
-Shows the simulated predictive distribution for a fixed \(x^*\).
+This plot shows the simulated predictive distribution for a fixed \(x^*\).
 
-The true prediction at \(x^*=1\) is
+For example, at
 
 $$
-1+2(1)=3.
+x^*=1,
 $$
 
-The plot shows that the simulated distribution is centered close to this value.
+the mean of the true regression function is
+
+$$
+\beta_0+\beta_1x^*
+=
+1+2(1)
+=
+3.
+$$
+
+The simulated predictive distribution should therefore be centered close to \(3\).
+
+---
 
 ### Plot 2 — Monte Carlo Coverage
 
-Plots empirical coverage against nominal coverage.
+This plot compares empirical coverage with nominal coverage.
 
 The diagonal line
 
@@ -247,43 +333,49 @@ $$
 y=x
 $$
 
-represents perfect agreement.
+represents perfect agreement between the desired and observed coverage.
 
-### Plot 3 — Closed-Form Comparison
+Points close to the diagonal indicate that the empirical coverage is close to the nominal coverage.
 
-Compares:
+---
+
+### Plot 3 — Closed-Form Coverage Comparison
+
+This plot compares:
 
 * OLS Exact
 * OLS Chernoff
 * Bayesian Exact
 * Bayesian Chernoff
 
-The exact Gaussian methods should be close to the nominal coverage.
+The exact Gaussian methods should be close to their nominal coverage when their assumptions are satisfied.
 
-The Chernoff methods are expected to be more conservative because the bound is looser than the exact Gaussian tail probability.
+The Chernoff methods may produce more conservative intervals because a concentration bound generally provides a looser tail guarantee than the exact Gaussian quantile.
 
 ---
 
-## 10. Main Takeaway
+## 10. Overall Pipeline
 
-The notebook demonstrates the following pipeline:
+The experiment follows the pipeline
 
 $$
 \boxed{
-\text{Model}
+\text{Data}
 \rightarrow
-\text{Predictive uncertainty}
+\text{Regression Model}
 \rightarrow
-\text{Prediction interval}
+\text{Predictive Distribution}
 \rightarrow
-\text{Coverage check}
+\text{Prediction Interval}
+\rightarrow
+\text{Coverage Experiment}
 }
 $$
 
-The main comparison is between **exact distribution-based intervals** and **Chernoff-bound intervals**.
+The central comparison is between **distribution-specific uncertainty quantification** and **bound-based uncertainty quantification**.
 
-The exact Gaussian approach gives tighter intervals when the Gaussian assumption is valid.
+The exact Gaussian approach uses knowledge of the full predictive distribution to construct a tighter interval.
 
-Chernoff bounds give a more general way to construct intervals under weaker sub-Gaussian assumptions, but can produce wider, more conservative intervals.
+The Chernoff approach uses a tail bound and therefore requires less distributional information, at the cost of potentially wider intervals.
 
-Finally, repeated experiments allow us to check how the empirical coverage compares with the desired nominal coverage.
+Finally, repeated experiments allow us to empirically evaluate whether the constructed intervals achieve their intended coverage.
